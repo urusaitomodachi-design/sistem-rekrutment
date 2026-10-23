@@ -100,7 +100,15 @@ def admin_dashboard():
                 df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
                 
                 file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
-                df.to_excel(file_path, index=False)
+                
+                # Menggunakan openpyxl untuk mengatur lebar kolom Excel secara otomatis agar rapi
+                with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                    df.to_excel(writer, index=False, sheet_name='Kandidat')
+                    worksheet = writer.sheets['Kandidat']
+                    for col in worksheet.columns:
+                        max_len = max(len(str(cell.value or '')) for cell in col)
+                        col_letter = col[0].column_letter
+                        worksheet.column_dimensions[col_letter].width = max(max_len + 4, 15)
                 
                 cursor.execute("UPDATE sessions SET is_active = 0 WHERE id = ?", (s_id,))
                 conn.commit()
