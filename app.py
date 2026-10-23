@@ -6,7 +6,9 @@ from flask import Flask, render_template, request, redirect, url_for, session, s
 import pandas as pd
 
 app = Flask(__name__)
-app.secret_key = "kunci-rahasia-admin-sangat-aman-123"
+
+# Mengambil secret key dari Environment Variables Render (aman dari kebocoran kode)
+app.secret_key = os.environ.get("SECRET_KEY", "palabapakkau")
 
 DB_NAME = "rekrutmen.db"
 
@@ -48,7 +50,11 @@ def check_midnight_reset():
 def login():
     if request.method == 'POST':
         password = request.form.get('password')
-        if password == "admin123": # Password Admin Anda
+        
+        # Mengambil password admin dari Environment Variables Render
+        admin_password = os.environ.get("ADMIN_PASSWORD", "kontol123")
+        
+        if password == admin_password:
             session['logged_in'] = True
             session['login_time'] = datetime.date.today().isoformat()
             return redirect(url_for('admin_dashboard'))
