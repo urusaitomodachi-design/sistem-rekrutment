@@ -7,7 +7,7 @@ import pandas as pd
 
 app = Flask(__name__)
 
-# Mengambil secret key dari Environment Variables Render (aman dari kebocoran kode)
+# Mengambil secret key dari Environment Variables Render
 app.secret_key = os.environ.get("SECRET_KEY", "palabapakkau")
 
 DB_NAME = "rekrutmen.db"
@@ -116,6 +116,22 @@ def admin_dashboard():
     current_token = str(uuid.uuid4())[:8]
     
     return render_template('admin.html', active_session=active_session, candidate_count=candidate_count, token=current_token)
+
+@app.route('/api/candidate-count')
+def candidate_count_api():
+    if not session.get('logged_in'):
+        return {"count": 0}
+    
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    active_session = cursor.execute("SELECT id FROM sessions WHERE is_active = 1").fetchone()
+    
+    count = 0
+    if active_session:
+        count = cursor.execute("SELECT COUNT(*) FROM candidates WHERE session_id = ?", (active_session[0],)).fetchone()[0]
+        
+    conn.close()
+    return {"count": count}
 
 @app.route('/apply/<token>', methods=['GET', 'POST'])
 def apply(token):
