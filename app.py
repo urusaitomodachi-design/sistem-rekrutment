@@ -32,6 +32,8 @@ def init_db():
             full_name TEXT,
             operator_type TEXT,
             whatsapp TEXT,
+            education TEXT,
+            major TEXT,
             submitted_at TEXT
         )
     ''')
@@ -97,7 +99,7 @@ def admin_dashboard():
             
             if active_session:
                 s_id, pt, dept = active_session
-                df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
+                df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
                 
                 file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
                 
@@ -156,12 +158,14 @@ def apply(token):
         full_name = request.form.get('full_name', '').upper()
         operator_type = request.form.get('operator_type', '').upper()
         whatsapp = request.form.get('whatsapp', '').upper()
+        education = request.form.get('education', '').upper()
+        major = request.form.get('major', '').upper()
         submitted_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO candidates (session_id, reg_no, full_name, operator_type, whatsapp, submitted_at) VALUES (?, ?, ?, ?, ?, ?)",
-                       (active_session[0], reg_no, full_name, operator_type, whatsapp, submitted_at))
+        cursor.execute("INSERT INTO candidates (session_id, reg_no, full_name, operator_type, whatsapp, education, major, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                       (active_session[0], reg_no, full_name, operator_type, whatsapp, education, major, submitted_at))
         conn.commit()
         conn.close()
         return "<h3 style='text-align:center; margin-top:50px; color:green;'>Data Anda berhasil dikirim! Terima kasih.</h3>"
