@@ -64,7 +64,7 @@ def login():
             session['logged_in'] = True
             session['login_time'] = datetime.date.today().isoformat()
             return redirect(url_for('admin_dashboard'))
-        return render_template('login.html', error="Password Salah!")
+        return render_template('login.html', error="Kata laluan salah!")
     return render_template('login.html')
 
 @app.route('/logout')
@@ -104,18 +104,15 @@ def admin_dashboard():
             if active_session:
                 s_id, pt, dept = active_session
                 
-                # Ambil data kandidat beserta nama file foto kartu
                 cursor.execute("SELECT reg_no, full_name, operator_type, whatsapp, education, major, reg_card, submitted_at FROM candidates WHERE session_id = ?", (s_id,))
                 rows = cursor.fetchall()
                 
                 file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
                 
-                # Membuat Excel workbook menggunakan openpyxl
                 wb = Workbook()
                 ws = wb.active
                 ws.title = "Kandidat"
                 
-                # Header Kolom Excel
                 headers = ['No Registrasi', 'Nama Lengkap', 'Operator', 'No WA Aktif', 'Pendidikan', 'Jurusan', 'Waktu Submit', 'Foto Kartu Registrasi']
                 ws.append(headers)
                 
@@ -128,28 +125,27 @@ def admin_dashboard():
                         if os.path.exists(img_path):
                             try:
                                 img = XLImage(img_path)
-                                img.width = 90
-                                img.height = 90
+                                # Resolusi diperbesar agar gambar jelas dan tidak kabur
+                                img.width = 180
+                                img.height = 180
                                 ws.add_image(img, f'H{idx}')
-                                ws.row_dimensions[idx].height = 75
+                                ws.row_dimensions[idx].height = 130
                             except Exception as e:
                                 print(f"Gagal menyisipkan gambar ke Excel: {e}")
                         else:
-                            ws.cell(row=idx, column=8, value="[File Foto Tidak Ditemukan]")
+                            ws.cell(row=idx, column=8, value="[Fail Foto Tidak Ditemukan]")
                     else:
-                        ws.cell(row=idx, column=8, value="[Tidak Ada Foto]")
+                        ws.cell(row=idx, column=8, value="[Tiada Foto]")
                 
-                # Penyesuaian lebar kolom teks agar rapi
                 for col in ws.columns:
                     max_len = max(len(str(cell.value or '')) for cell in col)
                     col_letter = col[0].column_letter
                     ws.column_dimensions[col_letter].width = max(max_len + 4, 15)
                 
-                ws.column_dimensions['H'].width = 22
+                ws.column_dimensions['H'].width = 28
                 wb.save(file_path)
                 
-                # --- BERSIHKAN DATA DARI SISTEM SETELAH DOWNLOAD ---
-                # 1. Hapus file fisik foto dari folder uploads
+                # Pembersihan data automatik selepas muat turun
                 for row in rows:
                     reg_card = row[6]
                     if reg_card:
@@ -160,7 +156,6 @@ def admin_dashboard():
                             except:
                                 pass
                 
-                # 2. Hapus data kandidat dan sesi dari database SQLite
                 cursor.execute("DELETE FROM candidates WHERE session_id = ?", (s_id,))
                 cursor.execute("DELETE FROM sessions WHERE id = ?", (s_id,))
                 conn.commit()
@@ -202,7 +197,7 @@ def apply(token):
     conn.close()
     
     if not active_session:
-        return "<h3 style='text-align:center; margin-top:50px;'>Maaf, sesi rekrutmen ini telah ditutup oleh Admin atau telah berakhir.</h3>"
+        return "<h3 style='text-align:center; margin-top:50px;'>Maaf, sesi rekrutmen ini telah ditutup oleh Admin atau telah tamat.</h3>"
         
     if request.method == 'POST':
         reg_no = request.form.get('reg_no', '').upper()
@@ -226,7 +221,7 @@ def apply(token):
                        (active_session[0], reg_no, full_name, operator_type, whatsapp, education, major, filename, submitted_at))
         conn.commit()
         conn.close()
-        return "<h3 style='text-align:center; margin-top:50px; color:green;'>Data Anda berhasil dikirim! Terima kasih.</h3>"
+        return "<h3 style='text-align:center; margin-top:50px; color:green;'>Data anda berjaya dihantar! Terima kasih.</h3>"
         
     return render_template('form.html', session_info=active_session)
 
