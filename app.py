@@ -4,6 +4,7 @@ import uuid
 import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 
@@ -11,6 +12,8 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "palabapakkau")
 
 DB_NAME = "rekrutmen.db"
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -34,6 +37,7 @@ def init_db():
             whatsapp TEXT,
             education TEXT,
             major TEXT,
+            reg_card TEXT,
             submitted_at TEXT
         )
     ''')
@@ -52,8 +56,6 @@ def check_midnight_reset():
 def login():
     if request.method == 'POST':
         password = request.form.get('password')
-        
-        # Mengambil password admin dari Environment Variables Render
         admin_password = os.environ.get("ADMIN_PASSWORD", "kontol123")
         
         if password == admin_password:
@@ -99,11 +101,10 @@ def admin_dashboard():
             
             if active_session:
                 s_id, pt, dept = active_session
-                df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
+                df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', reg_card AS 'File Kartu Registrasi', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
                 
                 file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
                 
-                # Menggunakan openpyxl untuk mengatur lebar kolom Excel secara otomatis agar rapi
                 with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
                     df.to_excel(writer, index=False, sheet_name='Kandidat')
                     worksheet = writer.sheets['Kandidat']
@@ -162,10 +163,17 @@ def apply(token):
         major = request.form.get('major', '').upper()
         submitted_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        file = request.files.get('reg_card')
+        filename = ""
+        if file and file.filename != '':
+            safe_name = secure_filename(file.filename)
+            filename = f"{reg_no}_{int(datetime.datetime.now().timestamp())}_{safe_name}"
+            file.save(os.path.join(UPLOAD_FOLDER, filename))
+        
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO candidates (session_id, reg_no, full_name, operator_type, whatsapp, education, major, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                       (active_session[0], reg_no, full_name, operator_type, whatsapp, education, major, submitted_at))
+        cursor.execute("INSERT INTO candidates (session_id, reg_no, full_name, operator_type, whatsapp, education, major, reg_card, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       (active_session[0], reg_no, full_name, operator_type, whatsapp, education, major, filename, submitted_at))
         conn.commit()
         conn.close()
         return "<h3 style='text-align:center; margin-top:50px; color:green;'>Data Anda berhasil dikirim! Terima kasih.</h3>"
