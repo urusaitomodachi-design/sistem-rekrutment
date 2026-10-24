@@ -24,6 +24,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             pt_name TEXT,
             department TEXT,
+            session_token TEXT,
             is_active INTEGER DEFAULT 1,
             created_at TEXT
         )
@@ -42,15 +43,6 @@ def init_db():
             submitted_at TEXT
         )
     ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            token TEXT,
-            session_id INTEGER,
-            expires_at TEXT,
-            is_used INTEGER DEFAULT 0
-        )
-    ''')
     conn.commit()
     conn.close()
 
@@ -61,6 +53,11 @@ def check_midnight_reset():
     if 'login_time' in session:
         if session['login_time'] != datetime.date.today().isoformat():
             session.clear()
+
+# Rute khusus untuk pencegah sleep (dipakai UptimeRobot)
+@app.route('/ping')
+def ping():
+    return "OK", 200
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -95,9 +92,10 @@ def admin_dashboard():
             pt = request.form.get('pt_name').upper()
             dept = request.form.get('department').upper()
             now = datetime.datetime.now().isoformat()
+            session_token = str(uuid.uuid4())[:8]
             
             cursor.execute("UPDATE sessions SET is_active = 0")
-            cursor.execute("INSERT INTO sessions (pt_name, department, is_active, created_at) VALUES (?, ?, 1, ?)", (pt, dept, now))
+            cursor.execute("INSERT INTO sessions (pt_name, department, session_token, is_active, created_at) VALUES (?, ?, ?, 1, ?)", (pt, dept, session_token, now))
             conn.commit()
             
         elif action == 'stop':
@@ -112,13 +110,19 @@ def admin_dashboard():
             if active_session:
                 s_id, pt, dept = active_session
                 
-                # Ekspor data teks murni ke Excel (Tanpa Gambar di dalam sel)
                 df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', reg_card AS 'Nama File Foto', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
                 
                 file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
-                df.to_excel(file_path, index=False, sheet_name='Kandidat')
                 
-                # Bersihkan database dan file upload setelah didownload
+                with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                    df.to_excel(writer, index=False, sheet_name='Kandidat')
+                    worksheet = writer.sheets['Kandidat']
+                    for col in worksheet.columns:
+                        max_len = max(len(str(cell.value or '')) for cell in col)
+                        col_letter = col[0].column_letter
+                        worksheet.column_dimensions[col_letter].width = max(max_len + 5, 18)
+                
+                # Hapus file foto fisik dari folder uploads
                 cursor.execute("SELECT reg_card FROM candidates WHERE session_id = ?", (s_id,))
                 rows = cursor.fetchall()
                 for row in rows:
@@ -128,46 +132,21 @@ def admin_dashboard():
                             try: os.remove(img_path)
                             except: pass
                 
+                # Hapus data dari database setelah di-download
                 cursor.execute("DELETE FROM candidates WHERE session_id = ?", (s_id,))
-                cursor.execute("DELETE FROM tokens WHERE session_id = ?", (s_id,))
                 cursor.execute("DELETE FROM sessions WHERE id = ?", (s_id,))
                 conn.commit()
                 conn.close()
                 
                 return send_file(file_path, as_attachment=True)
 
-    active_session = cursor.execute("SELECT id, pt_name, department FROM sessions WHERE is_active = 1").fetchone()
+    active_session = cursor.execute("SELECT id, pt_name, department, session_token FROM sessions WHERE is_active = 1").fetchone()
     candidate_count = 0
     if active_session:
         candidate_count = cursor.execute("SELECT COUNT(*) FROM candidates WHERE session_id = ?", (active_session[0],)).fetchone()[0]
         
     conn.close()
-    
     return render_template('admin.html', active_session=active_session, candidate_count=candidate_count)
-
-# API untuk membuat token barcode eksklusif (Masa aktif 2 menit)
-@app.route('/api/generate-token')
-def generate_token():
-    if not session.get('logged_in'):
-        return {"error": "Unauthorized"}, 403
-    
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    active_session = cursor.execute("SELECT id FROM sessions WHERE is_active = 1").fetchone()
-    if not active_session:
-        conn.close()
-        return {"error": "No active session"}, 400
-    
-    session_id = active_session[0]
-    token = str(uuid.uuid4())[:8]
-    # Token berlaku tepat 2 menit
-    expires_at = (datetime.datetime.now() + datetime.timedelta(minutes=2, seconds=5)).isoformat()
-    
-    cursor.execute("INSERT INTO tokens (token, session_id, expires_at, is_used) VALUES (?, ?, ?, 0)", 
-                   (token, session_id, expires_at))
-    conn.commit()
-    conn.close()
-    return {"token": token}
 
 @app.route('/api/candidate-count')
 def candidate_count_api():
@@ -185,7 +164,6 @@ def candidate_count_api():
     conn.close()
     return {"count": count}
 
-# Endpoint Download ZIP Foto
 @app.route('/admin/download-images')
 def download_images():
     if not session.get('logged_in'):
@@ -205,31 +183,11 @@ def apply(token):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # Periksa validitas token
-    token_data = cursor.execute("SELECT id, session_id, expires_at, is_used FROM tokens WHERE token = ?", (token,)).fetchone()
-    
-    if not token_data:
-        conn.close()
-        return "<h3 style='text-align:center; margin-top:50px; color:red;'>Maaf, link QR code tidak valid atau tidak dikenali.</h3>"
-    
-    t_id, session_id, expires_at, is_used = token_data
-    
-    # Cek apakah token sudah pernah digunakan (sekali pakai)
-    if is_used == 1:
-        conn.close()
-        return "<h3 style='text-align:center; margin-top:50px; color:orange;'>Link ini sudah pernah digunakan untuk mengirim data dan sekarang sudah tidak dapat diakses kembali.</h3>"
-    
-    # Cek apakah token sudah kedaluwarsa (> 2 menit)
-    exp_time = datetime.datetime.fromisoformat(expires_at)
-    if datetime.datetime.now() > exp_time:
-        conn.close()
-        return "<h3 style='text-align:center; margin-top:50px; color:red;'>Maaf, link QR code ini telah kedaluwarsa (lebih dari 2 menit). Silakan gunakan QR code terbaru di panel admin.</h3>"
-    
-    active_session = cursor.execute("SELECT id, pt_name, department FROM sessions WHERE id = ? AND is_active = 1", (session_id,)).fetchone()
+    active_session = cursor.execute("SELECT id, pt_name, department FROM sessions WHERE session_token = ? AND is_active = 1", (token,)).fetchone()
     conn.close()
     
     if not active_session:
-        return "<h3 style='text-align:center; margin-top:50px;'>Maaf, sesi rekrutmen ini telah ditutup oleh Admin.</h3>"
+        return "<h3 style='text-align:center; margin-top:50px; color:red;'>Maaf, sesi rekrutmen ini telah ditutup oleh Admin atau link tidak valid.</h3>"
         
     if request.method == 'POST':
         reg_no = request.form.get('reg_no', '').upper()
@@ -249,14 +207,11 @@ def apply(token):
         
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        # Simpan data kandidat
         cursor.execute("INSERT INTO candidates (session_id, reg_no, full_name, operator_type, whatsapp, education, major, reg_card, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                        (active_session[0], reg_no, full_name, operator_type, whatsapp, education, major, filename, submitted_at))
-        # Kunci token agar tidak bisa dipakai lagi (Sekali Pakai)
-        cursor.execute("UPDATE tokens SET is_used = 1 WHERE id = ?", (t_id,))
         conn.commit()
         conn.close()
-        return "<h3 style='text-align:center; margin-top:50px; color:green;'>Data Anda berhasil dikirim! Terima kasih. Akses ke halaman ini telah ditutup.</h3>"
+        return "<h3 style='text-align:center; margin-top:50px; color:green;'>Data Anda berhasil dikirim! Terima kasih.</h3>"
         
     return render_template('form.html', session_info=active_session)
 
