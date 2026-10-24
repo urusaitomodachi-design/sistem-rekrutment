@@ -39,7 +39,7 @@
                 <span>Kandidat Masuk: <b id="candidate-count" class="fs-5 text-dark">{{ candidate_count }}</b> orang</span>
             </div>
             
-            <p class="small text-muted mb-2">Barcode otomatis memperbarui link setiap 2 menit. Link lama otomatis mati dan tidak bisa digunakan kembali setelah dikirim.</p>
+            <p class="small text-muted mb-2">Barcode ini dapat digunakan oleh banyak kandidat secara bergantian selama sesi aktif. Link baru akan mati setelah Anda mendownload Excel.</p>
             
             <div class="d-flex justify-content-center mb-3">
                 <div id="qrcode" class="p-2 bg-white border rounded"></div>
@@ -62,26 +62,16 @@
         </div>
         
         <script>
-            function generateQR() {
-                fetch('/api/generate-token')
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.token) {
-                            document.getElementById("qrcode").innerHTML = "";
-                            let currentUrl = window.location.origin + "/apply/" + data.token;
-                            new QRCode(document.getElementById("qrcode"), {
-                                text: currentUrl,
-                                width: 180,
-                                height: 180
-                            });
-                        }
-                    })
-                    .catch(error => console.error('Error generating token:', error));
-            }
-            
-            generateQR();
-            setInterval(generateQR, 120000); // Rotasi setiap 2 menit
+            // Membuat QR code menggunakan token sesi yang aktif
+            let sessionToken = "{{ active_session[3] }}";
+            let currentUrl = window.location.origin + "/apply/" + sessionToken;
+            new QRCode(document.getElementById("qrcode"), {
+                text: currentUrl,
+                width: 180,
+                height: 180
+            });
 
+            // Update jumlah kandidat secara real-time setiap 3 detik
             function updateCandidateCount() {
                 fetch('/api/candidate-count')
                     .then(response => response.json())
