@@ -3,22 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Admin Rekrutmen</title>
+    <title>Form Pendaftaran Kandidat</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="bg-light d-flex align-items-center py-4" style="min-height: 100vh;">
-    <div class="container" style="max-width: 400px;">
+<body class="bg-light py-4">
+    <div class="container px-3" style="max-width: 500px;">
         <div class="card shadow-sm p-4">
-            <h3 class="text-center mb-4">Login Admin</h3>
-            {% if error %}
-            <div class="alert alert-danger py-2 text-small">{{ error }}</div>
-            {% endif %}
-            <form method="POST">
+            <h4 class="text-center mb-3">Form Pendaftaran</h4>
+            <div class="alert alert-info py-2 text-center small mb-4">
+                PT: <b>{{ session_info[1] }}</b><br>
+                Departemen: <b>{{ session_info[2] }}</b>
+            </div>
+            
+            <form method="POST" enctype="multipart/form-data">
                 <div class="mb-3">
-                    <label class="form-label">Password Admin:</label>
-                    <input type="password" name="password" class="form-control" placeholder="Masukkan password" required>
+                    <label class="form-label">No Registrasi:</label>
+                    <input type="text" name="reg_no" class="form-control text-uppercase" placeholder="Masukkan No Registrasi" required>
                 </div>
-                <button type="submit" class="btn btn-primary w-100">Masuk</button>
+                <div class="mb-3">
+                    <label class="form-label">Nama Lengkap:</label>
+                    <input type="text" name="full_name" class="form-control text-uppercase" placeholder="Masukkan Nama Lengkap" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Jenis Operator:</label>
+                    <input type="text" name="operator_type" class="form-control text-uppercase" placeholder="Contoh: Forklift / Produksi" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Pendidikan Terakhir:</label>
+                    <select name="education" class="form-select text-uppercase" required>
+                        <option value="" disabled selected>-- Pilih Pendidikan --</option>
+                        <option value="SD">SD</option>
+                        <option value="SMP">SMP</option>
+                        <option value="SMA">SMA</option>
+                        <option value="SMK">SMK</option>
+                        <option value="MA">MA</option>
+                        <option value="PAKET C">PAKET C</option>
+                        <option value="D1">D1</option>
+                        <option value="D2">D2</option>
+                        <option value="D3">D3</option>
+                        <option value="D4">D4</option>
+                        <option value="S1">S1</option>
+                        <option value="S2">S2</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Jurusan Terakhir:</label>
+                    <input type="text" name="major" class="form-control text-uppercase" placeholder="Contoh: Teknik Mesin / Akuntansi" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Foto Kartu Registrasi:</label>
+                    <input type="file" name="reg_card" class="form-control" accept="image/*" required>
+                    <div class="form-text text-muted small">Bisa langsung foto pakai kamera HP atau ambil dari galeri.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">No WhatsApp Aktif:</label>
+                    <input type="tel" name="whatsapp" class="form-control" placeholder="Contoh: 08123456789" required>
+                </div>
+                <button type="submit" class="btn btn-success w-100 py-2">Kirim Data</button>
             </form>
         </div>
     </div>
