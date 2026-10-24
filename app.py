@@ -54,6 +54,11 @@ def check_midnight_reset():
         if session['login_time'] != datetime.date.today().isoformat():
             session.clear()
 
+# Rute pencegah sleep (untuk UptimeRobot)
+@app.route('/ping')
+def ping():
+    return "OK", 200
+
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -87,7 +92,7 @@ def admin_dashboard():
             pt = request.form.get('pt_name').upper()
             dept = request.form.get('department').upper()
             now = datetime.datetime.now().isoformat()
-            session_token = str(uuid.uuid4())[:8] # Token tetap untuk sesi ini
+            session_token = str(uuid.uuid4())[:8] # Token unik untuk satu sesi rekrutmen
             
             cursor.execute("UPDATE sessions SET is_active = 0")
             cursor.execute("INSERT INTO sessions (pt_name, department, session_token, is_active, created_at) VALUES (?, ?, ?, 1, ?)", (pt, dept, session_token, now))
@@ -117,7 +122,7 @@ def admin_dashboard():
                         col_letter = col[0].column_letter
                         worksheet.column_dimensions[col_letter].width = max(max_len + 5, 18)
                 
-                # Hapus file foto fisik dari folder uploads
+                # Hapus file foto fisik dari folder uploads setelah didownload
                 cursor.execute("SELECT reg_card FROM candidates WHERE session_id = ?", (s_id,))
                 rows = cursor.fetchall()
                 for row in rows:
@@ -127,7 +132,7 @@ def admin_dashboard():
                             try: os.remove(img_path)
                             except: pass
                 
-                # Hapus data dari database setelah di-download
+                # Hapus data dari database agar link mati dan bersih untuk sesi berikutnya
                 cursor.execute("DELETE FROM candidates WHERE session_id = ?", (s_id,))
                 cursor.execute("DELETE FROM sessions WHERE id = ?", (s_id,))
                 conn.commit()
@@ -178,12 +183,12 @@ def apply(token):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # Cek apakah sesi aktif berdasarkan token sesi yang sama
+    # Memeriksa apakah token sesi valid dan aktif
     active_session = cursor.execute("SELECT id, pt_name, department FROM sessions WHERE session_token = ? AND is_active = 1", (token,)).fetchone()
     conn.close()
     
     if not active_session:
-        return "<h3 style='text-align:center; margin-top:50px; color:red;'>Maaf, sesi rekrutmen ini telah ditutup oleh Admin atau link tidak valid.</h3>"
+        return "<h3 style='text-align:center; margin-top:50px; color:red;'>Maaf, sesi rekrutmen ini telah ditutup atau link sudah tidak berlaku (telah di-reset oleh Admin).</h3>"
         
     if request.method == 'POST':
         reg_no = request.form.get('reg_no', '').upper()
