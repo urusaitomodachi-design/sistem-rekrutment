@@ -5,8 +5,6 @@ import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
 from werkzeug.utils import secure_filename
-from openpyxl import Workbook
-from openpyxl.drawing.image import Image as XLImage
 
 app = Flask(__name__)
 
@@ -64,7 +62,7 @@ def login():
             session['logged_in'] = True
             session['login_time'] = datetime.date.today().isoformat()
             return redirect(url_for('admin_dashboard'))
-        return render_template('login.html', error="Kata laluan salah!")
+        return render_template('login.html', error="Password Salah!")
     return render_template('login.html')
 
 @app.route('/logout')
@@ -104,50 +102,24 @@ def admin_dashboard():
             if active_session:
                 s_id, pt, dept = active_session
                 
-                cursor.execute("SELECT reg_no, full_name, operator_type, whatsapp, education, major, reg_card, submitted_at FROM candidates WHERE session_id = ?", (s_id,))
-                rows = cursor.fetchall()
+                # Menggunakan Pandas untuk mengekspor data ke Excel dengan rapi
+                df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', reg_card AS 'Nama File Foto Kartu', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
                 
                 file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
                 
-                wb = Workbook()
-                ws = wb.active
-                ws.title = "Kandidat"
+                with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                    df.to_excel(writer, index=False, sheet_name='Kandidat')
+                    worksheet = writer.sheets['Kandidat']
+                    for col in worksheet.columns:
+                        max_len = max(len(str(cell.value or '')) for cell in col)
+                        col_letter = col[0].column_letter
+                        worksheet.column_dimensions[col_letter].width = max(max_len + 4, 15)
                 
-                headers = ['No Registrasi', 'Nama Lengkap', 'Operator', 'No WA Aktif', 'Pendidikan', 'Jurusan', 'Waktu Submit', 'Foto Kartu Registrasi']
-                ws.append(headers)
-                
-                for idx, row in enumerate(rows, start=2):
-                    reg_no, full_name, operator_type, whatsapp, education, major, reg_card, submitted_at = row
-                    ws.append([reg_no, full_name, operator_type, whatsapp, education, major, submitted_at])
-                    
-                    if reg_card:
-                        img_path = os.path.join(UPLOAD_FOLDER, reg_card)
-                        if os.path.exists(img_path):
-                            try:
-                                img = XLImage(img_path)
-                                # Resolusi diperbesar agar gambar jelas dan tidak kabur
-                                img.width = 180
-                                img.height = 180
-                                ws.add_image(img, f'H{idx}')
-                                ws.row_dimensions[idx].height = 130
-                            except Exception as e:
-                                print(f"Gagal menyisipkan gambar ke Excel: {e}")
-                        else:
-                            ws.cell(row=idx, column=8, value="[Fail Foto Tidak Ditemukan]")
-                    else:
-                        ws.cell(row=idx, column=8, value="[Tiada Foto]")
-                
-                for col in ws.columns:
-                    max_len = max(len(str(cell.value or '')) for cell in col)
-                    col_letter = col[0].column_letter
-                    ws.column_dimensions[col_letter].width = max(max_len + 4, 15)
-                
-                ws.column_dimensions['H'].width = 28
-                wb.save(file_path)
-                
-                # Pembersihan data automatik selepas muat turun
+                # Ambil daftar file gambar untuk dihapus dari folder uploads setelah didownload
+                cursor.execute("SELECT reg_card FROM candidates WHERE session_id = ?", (s_id,))
+                rows = cursor.fetchall()
                 for row in rows:
-                    reg_card = row[6]
+                    reg_card = row[0]
                     if reg_card:
                         img_path = os.path.join(UPLOAD_FOLDER, reg_card)
                         if os.path.exists(img_path):
@@ -156,6 +128,7 @@ def admin_dashboard():
                             except:
                                 pass
                 
+                # Hapus data dari database SQLite
                 cursor.execute("DELETE FROM candidates WHERE session_id = ?", (s_id,))
                 cursor.execute("DELETE FROM sessions WHERE id = ?", (s_id,))
                 conn.commit()
@@ -197,7 +170,7 @@ def apply(token):
     conn.close()
     
     if not active_session:
-        return "<h3 style='text-align:center; margin-top:50px;'>Maaf, sesi rekrutmen ini telah ditutup oleh Admin atau telah tamat.</h3>"
+        return "<h3 style='text-align:center; margin-top:50px;'>Maaf, sesi rekrutmen ini telah ditutup oleh Admin atau telah berakhir.</h3>"
         
     if request.method == 'POST':
         reg_no = request.form.get('reg_no', '').upper()
@@ -221,7 +194,7 @@ def apply(token):
                        (active_session[0], reg_no, full_name, operator_type, whatsapp, education, major, filename, submitted_at))
         conn.commit()
         conn.close()
-        return "<h3 style='text-align:center; margin-top:50px; color:green;'>Data anda berjaya dihantar! Terima kasih.</h3>"
+        return "<h3 style='text-align:center; margin-top:50px; color:green;'>Data Anda berhasil dikirim! Terima kasih.</h3>"
         
     return render_template('form.html', session_info=active_session)
 
