@@ -110,7 +110,7 @@ def admin_dashboard():
                 
                 file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
                 
-                # Membuat Excel workbook menggunakan openpyxl agar bisa menyisipkan gambar langsung
+                # Membuat Excel workbook menggunakan openpyxl
                 wb = Workbook()
                 ws = wb.active
                 ws.title = "Kandidat"
@@ -123,19 +123,21 @@ def admin_dashboard():
                     reg_no, full_name, operator_type, whatsapp, education, major, reg_card, submitted_at = row
                     ws.append([reg_no, full_name, operator_type, whatsapp, education, major, submitted_at])
                     
-                    # Jika kandidat mengupload foto kartu, masukkan gambar ke sel kolom H
                     if reg_card:
                         img_path = os.path.join(UPLOAD_FOLDER, reg_card)
                         if os.path.exists(img_path):
                             try:
                                 img = XLImage(img_path)
-                                # Atur ukuran thumbnail gambar agar pas di dalam sel Excel
                                 img.width = 90
                                 img.height = 90
                                 ws.add_image(img, f'H{idx}')
-                                ws.row_dimensions[idx].height = 75  # Perbesar tinggi baris supaya gambar tidak terpotong
+                                ws.row_dimensions[idx].height = 75
                             except Exception as e:
                                 print(f"Gagal menyisipkan gambar ke Excel: {e}")
+                        else:
+                            ws.cell(row=idx, column=8, value="[File Foto Tidak Ditemukan]")
+                    else:
+                        ws.cell(row=idx, column=8, value="[Tidak Ada Foto]")
                 
                 # Penyesuaian lebar kolom teks agar rapi
                 for col in ws.columns:
@@ -143,14 +145,27 @@ def admin_dashboard():
                     col_letter = col[0].column_letter
                     ws.column_dimensions[col_letter].width = max(max_len + 4, 15)
                 
-                # Berikan ruang lebar khusus untuk kolom gambar (Kolom H)
-                ws.column_dimensions['H'].width = 18
-                
+                ws.column_dimensions['H'].width = 22
                 wb.save(file_path)
                 
-                cursor.execute("UPDATE sessions SET is_active = 0 WHERE id = ?", (s_id,))
+                # --- BERSIHKAN DATA DARI SISTEM SETELAH DOWNLOAD ---
+                # 1. Hapus file fisik foto dari folder uploads
+                for row in rows:
+                    reg_card = row[6]
+                    if reg_card:
+                        img_path = os.path.join(UPLOAD_FOLDER, reg_card)
+                        if os.path.exists(img_path):
+                            try:
+                                os.remove(img_path)
+                            except:
+                                pass
+                
+                # 2. Hapus data kandidat dan sesi dari database SQLite
+                cursor.execute("DELETE FROM candidates WHERE session_id = ?", (s_id,))
+                cursor.execute("DELETE FROM sessions WHERE id = ?", (s_id,))
                 conn.commit()
                 conn.close()
+                
                 return send_file(file_path, as_attachment=True)
 
     active_session = cursor.execute("SELECT id, pt_name, department FROM sessions WHERE is_active = 1").fetchone()
