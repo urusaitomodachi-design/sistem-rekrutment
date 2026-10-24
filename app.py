@@ -54,11 +54,6 @@ def check_midnight_reset():
         if session['login_time'] != datetime.date.today().isoformat():
             session.clear()
 
-# Rute khusus untuk pencegah sleep (dipakai UptimeRobot)
-@app.route('/ping')
-def ping():
-    return "OK", 200
-
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -92,7 +87,7 @@ def admin_dashboard():
             pt = request.form.get('pt_name').upper()
             dept = request.form.get('department').upper()
             now = datetime.datetime.now().isoformat()
-            session_token = str(uuid.uuid4())[:8]
+            session_token = str(uuid.uuid4())[:8] # Token tetap untuk sesi ini
             
             cursor.execute("UPDATE sessions SET is_active = 0")
             cursor.execute("INSERT INTO sessions (pt_name, department, session_token, is_active, created_at) VALUES (?, ?, ?, 1, ?)", (pt, dept, session_token, now))
@@ -183,6 +178,7 @@ def apply(token):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
+    # Cek apakah sesi aktif berdasarkan token sesi yang sama
     active_session = cursor.execute("SELECT id, pt_name, department FROM sessions WHERE session_token = ? AND is_active = 1", (token,)).fetchone()
     conn.close()
     
