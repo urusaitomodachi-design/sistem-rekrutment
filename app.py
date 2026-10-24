@@ -5,6 +5,8 @@ import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
 from werkzeug.utils import secure_filename
+from openpyxl import Workbook
+from openpyxl.drawing.image import Image as XLImage
 
 app = Flask(__name__)
 
@@ -101,17 +103,50 @@ def admin_dashboard():
             
             if active_session:
                 s_id, pt, dept = active_session
-                df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', reg_card AS 'File Kartu Registrasi', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
+                
+                # Ambil data kandidat beserta nama file foto kartu
+                cursor.execute("SELECT reg_no, full_name, operator_type, whatsapp, education, major, reg_card, submitted_at FROM candidates WHERE session_id = ?", (s_id,))
+                rows = cursor.fetchall()
                 
                 file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
                 
-                with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-                    df.to_excel(writer, index=False, sheet_name='Kandidat')
-                    worksheet = writer.sheets['Kandidat']
-                    for col in worksheet.columns:
-                        max_len = max(len(str(cell.value or '')) for cell in col)
-                        col_letter = col[0].column_letter
-                        worksheet.column_dimensions[col_letter].width = max(max_len + 4, 15)
+                # Membuat Excel workbook menggunakan openpyxl agar bisa menyisipkan gambar langsung
+                wb = Workbook()
+                ws = wb.active
+                ws.title = "Kandidat"
+                
+                # Header Kolom Excel
+                headers = ['No Registrasi', 'Nama Lengkap', 'Operator', 'No WA Aktif', 'Pendidikan', 'Jurusan', 'Waktu Submit', 'Foto Kartu Registrasi']
+                ws.append(headers)
+                
+                for idx, row in enumerate(rows, start=2):
+                    reg_no, full_name, operator_type, whatsapp, education, major, reg_card, submitted_at = row
+                    ws.append([reg_no, full_name, operator_type, whatsapp, education, major, submitted_at])
+                    
+                    # Jika kandidat mengupload foto kartu, masukkan gambar ke sel kolom H
+                    if reg_card:
+                        img_path = os.path.join(UPLOAD_FOLDER, reg_card)
+                        if os.path.exists(img_path):
+                            try:
+                                img = XLImage(img_path)
+                                # Atur ukuran thumbnail gambar agar pas di dalam sel Excel
+                                img.width = 90
+                                img.height = 90
+                                ws.add_image(img, f'H{idx}')
+                                ws.row_dimensions[idx].height = 75  # Perbesar tinggi baris supaya gambar tidak terpotong
+                            except Exception as e:
+                                print(f"Gagal menyisipkan gambar ke Excel: {e}")
+                
+                # Penyesuaian lebar kolom teks agar rapi
+                for col in ws.columns:
+                    max_len = max(len(str(cell.value or '')) for cell in col)
+                    col_letter = col[0].column_letter
+                    ws.column_dimensions[col_letter].width = max(max_len + 4, 15)
+                
+                # Berikan ruang lebar khusus untuk kolom gambar (Kolom H)
+                ws.column_dimensions['H'].width = 18
+                
+                wb.save(file_path)
                 
                 cursor.execute("UPDATE sessions SET is_active = 0 WHERE id = ?", (s_id,))
                 conn.commit()
