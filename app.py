@@ -54,7 +54,7 @@ def check_midnight_reset():
         if session['login_time'] != datetime.date.today().isoformat():
             session.clear()
 
-# Rute pencegah sleep (untuk UptimeRobot)
+# Rute pencegah sleep (untuk Cron-job.org / UptimeRobot)
 @app.route('/ping')
 def ping():
     return "OK", 200
@@ -63,7 +63,7 @@ def ping():
 def login():
     if request.method == 'POST':
         password = request.form.get('password')
-        admin_password = os.environ.get("ADMIN_PASSWORD", "rekrutop")
+        admin_password = os.environ.get("ADMIN_PASSWORD", "kontol123")
         
         if password == admin_password:
             session['logged_in'] = True
@@ -92,7 +92,7 @@ def admin_dashboard():
             pt = request.form.get('pt_name').upper()
             dept = request.form.get('department').upper()
             now = datetime.datetime.now().isoformat()
-            session_token = str(uuid.uuid4())[:8] # Token unik untuk satu sesi rekrutmen
+            session_token = str(uuid.uuid4())[:8]
             
             cursor.execute("UPDATE sessions SET is_active = 0")
             cursor.execute("INSERT INTO sessions (pt_name, department, session_token, is_active, created_at) VALUES (?, ?, ?, 1, ?)", (pt, dept, session_token, now))
@@ -110,7 +110,8 @@ def admin_dashboard():
             if active_session:
                 s_id, pt, dept = active_session
                 
-                df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', reg_card AS 'Nama File Foto', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
+                # Query Excel tanpa menyertakan kolom nama file foto
+                df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
                 
                 file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
                 
@@ -122,7 +123,7 @@ def admin_dashboard():
                         col_letter = col[0].column_letter
                         worksheet.column_dimensions[col_letter].width = max(max_len + 5, 18)
                 
-                # Hapus file foto fisik dari folder uploads setelah didownload
+                # Hapus file foto fisik dari folder uploads setelah di-download
                 cursor.execute("SELECT reg_card FROM candidates WHERE session_id = ?", (s_id,))
                 rows = cursor.fetchall()
                 for row in rows:
@@ -183,7 +184,6 @@ def apply(token):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # Memeriksa apakah token sesi valid dan aktif
     active_session = cursor.execute("SELECT id, pt_name, department FROM sessions WHERE session_token = ? AND is_active = 1", (token,)).fetchone()
     conn.close()
     
