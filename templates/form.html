@@ -15,7 +15,7 @@
                 Departemen: <b>{{ session_info[2] }}</b>
             </div>
             
-            <form method="POST" enctype="multipart/form-data">
+            <form id="applyForm" method="POST" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label class="form-label">No Registrasi:</label>
                     <input type="text" name="reg_no" class="form-control text-uppercase" placeholder="Masukkan No Registrasi" required>
@@ -63,5 +63,15 @@
             </form>
         </div>
     </div>
+
+    <script>
+        // Validasi dan memunculkan pop-up konfirmasi sebelum form dikirim
+        document.getElementById('applyForm').addEventListener('submit', function(e) {
+            let confirmed = confirm("Apakah data ini sudah benar atau tidak?");
+            if (!confirmed) {
+                e.preventDefault(); // Membatalkan pengiriman jika kandidat menekan "Cancel"
+            }
+        });
+    </script>
 </body>
 </html>
