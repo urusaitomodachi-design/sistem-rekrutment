@@ -104,7 +104,7 @@ def admin_dashboard():
             cursor.execute("UPDATE sessions SET is_active = 0")
             conn.commit()
             
-        elif action == 'download':
+        elif action == 'download_all':
             active_session = cursor.execute("SELECT id, pt_name, department FROM sessions WHERE is_active = 1").fetchone()
             
             if not active_session:
@@ -123,11 +123,11 @@ def admin_dashboard():
                 error_message = "Belum ada data kandidat yang masuk pada sesi ini, sehingga file Excel dan foto belum dapat diunduh."
                 return render_template('admin.html', active_session=active_session, candidate_count=candidate_count, error_message=error_message)
             
+            # 1. Buat file Excel di server sementara
             df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
             
-            file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
-            
-            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+            excel_filename = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
+            with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='Kandidat')
                 worksheet = writer.sheets['Kandidat']
                 for col in worksheet.columns:
@@ -135,8 +135,32 @@ def admin_dashboard():
                     col_letter = col[0].column_letter
                     worksheet.column_dimensions[col_letter].width = max(max_len + 5, 18)
             
+            # 2. Ambil daftar nama file foto kandidat
             cursor.execute("SELECT reg_card FROM candidates WHERE session_id = ?", (s_id,))
             rows = cursor.fetchall()
+            
+            # 3. Bungkus Excel & Foto ke dalam memori ZIP
+            zip_filename = f"Rekrutmen_{pt}_{dept}.zip".replace(" ", "_")
+            memory_file = io.BytesIO()
+            with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+                # Masukkan file Excel ke root zip
+                zf.write(excel_filename, excel_filename)
+                
+                # Masukkan foto-foto ke dalam folder khusus di dalam zip
+                for row in rows:
+                    if row[0]:
+                        img_path = os.path.join(UPLOAD_FOLDER, row[0])
+                        if os.path.exists(img_path):
+                            zf.write(img_path, os.path.join("Foto_Kandidat", row[0]))
+            
+            memory_file.seek(0)
+            
+            # 4. Hapus file Excel sementara di server
+            if os.path.exists(excel_filename):
+                try: os.remove(excel_filename)
+                except: pass
+            
+            # 5. Hapus file foto fisik dari folder uploads
             for row in rows:
                 if row[0]:
                     img_path = os.path.join(UPLOAD_FOLDER, row[0])
@@ -144,12 +168,13 @@ def admin_dashboard():
                         try: os.remove(img_path)
                         except: pass
             
+            # 6. Hapus data dari database agar bersih untuk sesi berikutnya
             cursor.execute("DELETE FROM candidates WHERE session_id = ?", (s_id,))
             cursor.execute("DELETE FROM sessions WHERE id = ?", (s_id,))
             conn.commit()
             conn.close()
             
-            return send_file(file_path, as_attachment=True)
+            return send_file(memory_file, download_name=zip_filename, as_attachment=True)
 
     active_session = cursor.execute("SELECT id, pt_name, department, session_token FROM sessions WHERE is_active = 1").fetchone()
     candidate_count = 0
@@ -174,20 +199,6 @@ def candidate_count_api():
         
     conn.close()
     return {"count": count}
-
-@app.route('/admin/download-images')
-def download_images():
-    if not session.get('logged_in'):
-        return redirect(url_for('login'))
-    
-    memory_file = io.BytesIO()
-    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-        if os.path.exists(UPLOAD_FOLDER):
-            for root, dirs, files in os.walk(UPLOAD_FOLDER):
-                for file in files:
-                    zf.write(os.path.join(root, file), file)
-    memory_file.seek(0)
-    return send_file(memory_file, download_name='Foto_Kartu_Registrasi.zip', as_attachment=True)
 
 @app.route('/apply/<token>', methods=['GET', 'POST'])
 def apply(token):
