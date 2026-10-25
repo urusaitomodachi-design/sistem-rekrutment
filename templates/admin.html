@@ -14,6 +14,13 @@
             <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
         </div>
 
+        {% if error_message %}
+        <div class="alert alert-warning alert-dismissible fade show shadow-sm mb-3" role="alert">
+            {{ error_message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
+
         {% if not active_session %}
         <div class="card p-3 shadow-sm mb-4">
             <h6 class="mb-3">Mulai Sesi Rekrutmen Baru</h6>
@@ -62,7 +69,6 @@
         </div>
         
         <script>
-            // Membuat QR code menggunakan token sesi yang aktif
             let sessionToken = "{{ active_session[3] }}";
             let currentUrl = window.location.origin + "/apply/" + sessionToken;
             new QRCode(document.getElementById("qrcode"), {
@@ -71,7 +77,6 @@
                 height: 180
             });
 
-            // Update jumlah kandidat secara real-time setiap 3 detik
             function updateCandidateCount() {
                 fetch('/api/candidate-count')
                     .then(response => response.json())
