@@ -46,14 +46,10 @@
                 <span>Kandidat Masuk: <b id="candidate-count" class="fs-5 text-dark">{{ candidate_count }}</b> orang</span>
             </div>
             
-            <p class="small text-muted mb-2">Barcode ini dapat digunakan oleh banyak kandidat secara bergantian selama sesi aktif. Link baru akan mati setelah Anda mendownload Excel.</p>
+            <p class="small text-muted mb-2">Barcode ini dapat digunakan oleh banyak kandidat secara bergantian selama sesi aktif. Sesi akan di-reset otomatis setelah file diunduh.</p>
             
             <div class="d-flex justify-content-center mb-3">
                 <div id="qrcode" class="p-2 bg-white border rounded"></div>
-            </div>
-            
-            <div class="d-grid gap-2 mb-2">
-                <a href="/admin/download-images" class="btn btn-secondary btn-sm">Download Semua Foto (ZIP)</a>
             </div>
 
             <div class="d-grid gap-2 d-sm-flex justify-content-sm-center mt-3">
@@ -62,8 +58,8 @@
                     <button type="submit" class="btn btn-warning w-100 btn-sm">Matikan Sesi</button>
                 </form>
                 <form method="POST" class="w-100">
-                    <input type="hidden" name="action" value="download">
-                    <button type="submit" class="btn btn-primary w-100 btn-sm">Download Excel & Reset</button>
+                    <input type="hidden" name="action" value="download_all">
+                    <button type="submit" class="btn btn-primary w-100 btn-sm">Download Data & Foto (ZIP) & Reset</button>
                 </form>
             </div>
         </div>
