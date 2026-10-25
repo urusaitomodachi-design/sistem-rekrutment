@@ -63,7 +63,7 @@ def ping():
 def login():
     if request.method == 'POST':
         password = request.form.get('password')
-        admin_password = os.environ.get("ADMIN_PASSWORD", "kontol123")
+        admin_password = os.environ.get("ADMIN_PASSWORD", "rekrutop")
         
         if password == admin_password:
             session['logged_in'] = True
