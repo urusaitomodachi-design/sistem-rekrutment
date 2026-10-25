@@ -85,6 +85,8 @@ def admin_dashboard():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
+    error_message = None
+    
     if request.method == 'POST':
         action = request.form.get('action')
         
@@ -104,42 +106,50 @@ def admin_dashboard():
             
         elif action == 'download':
             active_session = cursor.execute("SELECT id, pt_name, department FROM sessions WHERE is_active = 1").fetchone()
-            if not active_session:
-                active_session = cursor.execute("SELECT id, pt_name, department FROM sessions ORDER BY id DESC LIMIT 1").fetchone()
             
-            if active_session:
-                s_id, pt, dept = active_session
-                
-                # Query Excel tanpa menyertakan kolom nama file foto
-                df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
-                
-                file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
-                
-                with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-                    df.to_excel(writer, index=False, sheet_name='Kandidat')
-                    worksheet = writer.sheets['Kandidat']
-                    for col in worksheet.columns:
-                        max_len = max(len(str(cell.value or '')) for cell in col)
-                        col_letter = col[0].column_letter
-                        worksheet.column_dimensions[col_letter].width = max(max_len + 5, 18)
-                
-                # Hapus file foto fisik dari folder uploads setelah di-download
-                cursor.execute("SELECT reg_card FROM candidates WHERE session_id = ?", (s_id,))
-                rows = cursor.fetchall()
-                for row in rows:
-                    if row[0]:
-                        img_path = os.path.join(UPLOAD_FOLDER, row[0])
-                        if os.path.exists(img_path):
-                            try: os.remove(img_path)
-                            except: pass
-                
-                # Hapus data dari database agar link mati dan bersih untuk sesi berikutnya
-                cursor.execute("DELETE FROM candidates WHERE session_id = ?", (s_id,))
-                cursor.execute("DELETE FROM sessions WHERE id = ?", (s_id,))
-                conn.commit()
+            if not active_session:
                 conn.close()
-                
-                return send_file(file_path, as_attachment=True)
+                active_session = None
+                candidate_count = 0
+                error_message = "Tidak ada sesi rekrutmen aktif saat ini, download dibatalkan."
+                return render_template('admin.html', active_session=active_session, candidate_count=candidate_count, error_message=error_message)
+            
+            s_id, pt, dept = active_session
+            
+            candidate_check = cursor.execute("SELECT COUNT(*) FROM candidates WHERE session_id = ?", (s_id,)).fetchone()[0]
+            if candidate_check == 0:
+                conn.close()
+                candidate_count = 0
+                error_message = "Belum ada data kandidat yang masuk pada sesi ini, sehingga file Excel dan foto belum dapat diunduh."
+                return render_template('admin.html', active_session=active_session, candidate_count=candidate_count, error_message=error_message)
+            
+            df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
+            
+            file_path = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
+            
+            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Kandidat')
+                worksheet = writer.sheets['Kandidat']
+                for col in worksheet.columns:
+                    max_len = max(len(str(cell.value or '')) for cell in col)
+                    col_letter = col[0].column_letter
+                    worksheet.column_dimensions[col_letter].width = max(max_len + 5, 18)
+            
+            cursor.execute("SELECT reg_card FROM candidates WHERE session_id = ?", (s_id,))
+            rows = cursor.fetchall()
+            for row in rows:
+                if row[0]:
+                    img_path = os.path.join(UPLOAD_FOLDER, row[0])
+                    if os.path.exists(img_path):
+                        try: os.remove(img_path)
+                        except: pass
+            
+            cursor.execute("DELETE FROM candidates WHERE session_id = ?", (s_id,))
+            cursor.execute("DELETE FROM sessions WHERE id = ?", (s_id,))
+            conn.commit()
+            conn.close()
+            
+            return send_file(file_path, as_attachment=True)
 
     active_session = cursor.execute("SELECT id, pt_name, department, session_token FROM sessions WHERE is_active = 1").fetchone()
     candidate_count = 0
@@ -147,7 +157,7 @@ def admin_dashboard():
         candidate_count = cursor.execute("SELECT COUNT(*) FROM candidates WHERE session_id = ?", (active_session[0],)).fetchone()[0]
         
     conn.close()
-    return render_template('admin.html', active_session=active_session, candidate_count=candidate_count)
+    return render_template('admin.html', active_session=active_session, candidate_count=candidate_count, error_message=error_message)
 
 @app.route('/api/candidate-count')
 def candidate_count_api():
