@@ -10,7 +10,6 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 
 app = Flask(__name__)
-
 app.secret_key = os.environ.get("SECRET_KEY", "palabapakkau")
 
 DB_NAME = "rekrutmen.db"
@@ -85,7 +84,6 @@ def admin_dashboard():
     
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    
     error_message = None
     
     if request.method == 'POST':
@@ -110,21 +108,18 @@ def admin_dashboard():
             
             if not active_session:
                 conn.close()
-                active_session = None
-                candidate_count = 0
                 error_message = "Tidak ada sesi rekrutmen aktif saat ini, download dibatalkan."
-                return render_template('admin.html', active_session=active_session, candidate_count=candidate_count, error_message=error_message)
+                return render_template('admin.html', active_session=None, candidate_count=0, error_message=error_message)
             
             s_id, pt, dept = active_session
             
             candidate_check = cursor.execute("SELECT COUNT(*) FROM candidates WHERE session_id = ?", (s_id,)).fetchone()[0]
             if candidate_check == 0:
                 conn.close()
-                candidate_count = 0
-                error_message = "Belum ada data kandidat yang masuk pada sesi ini, sehingga file Excel dan foto belum dapat diunduh."
-                return render_template('admin.html', active_session=active_session, candidate_count=candidate_count, error_message=error_message)
+                error_message = "Belum ada data kandidat yang masuk pada sesi ini."
+                return render_template('admin.html', active_session=active_session, candidate_count=0, error_message=error_message)
             
-            # Query Excel sesuai urutan kolom yang diminta
+            # Kolom Excel sesuai permintaan: No Registrasi, NIK KTP, Nama Lengkap, No WA Aktif, Pendidikan, Jurusan, Tempat Tanggal Lahir
             df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', nik AS 'NIK KTP', full_name AS 'Nama Lengkap', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', birth_info AS 'Tempat, Tanggal Lahir' FROM candidates WHERE session_id = {s_id}", conn)
             
             excel_filename = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
@@ -211,7 +206,12 @@ def apply(token):
         whatsapp = request.form.get('whatsapp', '').strip().upper()
         education = request.form.get('education', '').strip().upper()
         major = request.form.get('major', '').strip().upper()
-        birth_info = request.form.get('birth_info', '').strip().upper()
+        
+        # Format Tempat, Tanggal Lahir (Bulan dengan huruf kapital di awal, misal: Juli)
+        birth_place_day = request.form.get('birth_place_day', '').strip().title()
+        birth_month = request.form.get('birth_month', '').strip().capitalize()
+        birth_year = request.form.get('birth_year', '').strip()
+        birth_info = f"{birth_place_day} {birth_month} {birth_year}".strip()
         
         file = request.files.get('reg_card')
         filename = ""
@@ -220,11 +220,11 @@ def apply(token):
             filename = f"{reg_no}_{int(datetime.datetime.now().timestamp())}_{safe_name}"
             save_path = os.path.join(UPLOAD_FOLDER, filename)
             
-            # Kompresi gambar otomatis agar upload cepat
+            # Kompresi gambar otomatis via Pillow agar upload cepat
             try:
                 img = Image.open(file)
                 img = img.convert('RGB')
-                img.thumbnail((1200, 1200)) # Batasi ukuran maksimal
+                img.thumbnail((1200, 1200))
                 img.save(save_path, 'JPEG', quality=80)
             except Exception:
                 file.save(save_path)
@@ -232,7 +232,7 @@ def apply(token):
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         
-        # Fitur Upsert: Jika reg_no atau NIK sama, timpa dengan data baru
+        # Fitur Upsert: Jika reg_no atau NIK sama, data lama ditimpa data baru
         cursor.execute('''
             INSERT INTO candidates (session_id, reg_no, nik, full_name, whatsapp, education, major, birth_info, reg_card)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
