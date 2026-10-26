@@ -7,6 +7,7 @@ import io
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 import pandas as pd
 from werkzeug.utils import secure_filename
+from PIL import Image
 
 app = Flask(__name__)
 
@@ -34,13 +35,14 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id INTEGER,
             reg_no TEXT,
+            nik TEXT,
             full_name TEXT,
-            operator_type TEXT,
             whatsapp TEXT,
             education TEXT,
             major TEXT,
+            birth_info TEXT,
             reg_card TEXT,
-            submitted_at TEXT
+            UNIQUE(session_id, reg_no, nik)
         )
     ''')
     conn.commit()
@@ -54,7 +56,6 @@ def check_midnight_reset():
         if session['login_time'] != datetime.date.today().isoformat():
             session.clear()
 
-# Rute pencegah sleep (untuk Cron-job.org / UptimeRobot)
 @app.route('/ping')
 def ping():
     return "OK", 200
@@ -123,8 +124,8 @@ def admin_dashboard():
                 error_message = "Belum ada data kandidat yang masuk pada sesi ini, sehingga file Excel dan foto belum dapat diunduh."
                 return render_template('admin.html', active_session=active_session, candidate_count=candidate_count, error_message=error_message)
             
-            # 1. Buat file Excel di server sementara
-            df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', full_name AS 'Nama Lengkap', operator_type AS 'Operator', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', submitted_at AS 'Waktu Submit' FROM candidates WHERE session_id = {s_id}", conn)
+            # Query Excel sesuai urutan kolom yang diminta
+            df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', nik AS 'NIK KTP', full_name AS 'Nama Lengkap', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', birth_info AS 'Tempat, Tanggal Lahir' FROM candidates WHERE session_id = {s_id}", conn)
             
             excel_filename = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
             with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
@@ -135,18 +136,13 @@ def admin_dashboard():
                     col_letter = col[0].column_letter
                     worksheet.column_dimensions[col_letter].width = max(max_len + 5, 18)
             
-            # 2. Ambil daftar nama file foto kandidat
             cursor.execute("SELECT reg_card FROM candidates WHERE session_id = ?", (s_id,))
             rows = cursor.fetchall()
             
-            # 3. Bungkus Excel & Foto ke dalam memori ZIP
             zip_filename = f"Rekrutmen_{pt}_{dept}.zip".replace(" ", "_")
             memory_file = io.BytesIO()
             with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
-                # Masukkan file Excel ke root zip
                 zf.write(excel_filename, excel_filename)
-                
-                # Masukkan foto-foto ke dalam folder khusus di dalam zip
                 for row in rows:
                     if row[0]:
                         img_path = os.path.join(UPLOAD_FOLDER, row[0])
@@ -155,12 +151,10 @@ def admin_dashboard():
             
             memory_file.seek(0)
             
-            # 4. Hapus file Excel sementara di server
             if os.path.exists(excel_filename):
                 try: os.remove(excel_filename)
                 except: pass
             
-            # 5. Hapus file foto fisik dari folder uploads
             for row in rows:
                 if row[0]:
                     img_path = os.path.join(UPLOAD_FOLDER, row[0])
@@ -168,7 +162,6 @@ def admin_dashboard():
                         try: os.remove(img_path)
                         except: pass
             
-            # 6. Hapus data dari database agar bersih untuk sesi berikutnya
             cursor.execute("DELETE FROM candidates WHERE session_id = ?", (s_id,))
             cursor.execute("DELETE FROM sessions WHERE id = ?", (s_id,))
             conn.commit()
@@ -212,25 +205,46 @@ def apply(token):
         return "<h3 style='text-align:center; margin-top:50px; color:red;'>Maaf, sesi rekrutmen ini telah ditutup atau link sudah tidak berlaku (telah di-reset oleh Admin).</h3>"
         
     if request.method == 'POST':
-        reg_no = request.form.get('reg_no', '').upper()
-        full_name = request.form.get('full_name', '').upper()
-        operator_type = request.form.get('operator_type', '').upper()
-        whatsapp = request.form.get('whatsapp', '').upper()
-        education = request.form.get('education', '').upper()
-        major = request.form.get('major', '').upper()
-        submitted_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        reg_no = request.form.get('reg_no', '').strip().upper()
+        nik = request.form.get('nik', '').strip().upper()
+        full_name = request.form.get('full_name', '').strip().upper()
+        whatsapp = request.form.get('whatsapp', '').strip().upper()
+        education = request.form.get('education', '').strip().upper()
+        major = request.form.get('major', '').strip().upper()
+        birth_info = request.form.get('birth_info', '').strip().upper()
         
         file = request.files.get('reg_card')
         filename = ""
         if file and file.filename != '':
             safe_name = secure_filename(file.filename)
             filename = f"{reg_no}_{int(datetime.datetime.now().timestamp())}_{safe_name}"
-            file.save(os.path.join(UPLOAD_FOLDER, filename))
+            save_path = os.path.join(UPLOAD_FOLDER, filename)
+            
+            # Kompresi gambar otomatis agar upload cepat
+            try:
+                img = Image.open(file)
+                img = img.convert('RGB')
+                img.thumbnail((1200, 1200)) # Batasi ukuran maksimal
+                img.save(save_path, 'JPEG', quality=80)
+            except Exception:
+                file.save(save_path)
         
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO candidates (session_id, reg_no, full_name, operator_type, whatsapp, education, major, reg_card, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                       (active_session[0], reg_no, full_name, operator_type, whatsapp, education, major, filename, submitted_at))
+        
+        # Fitur Upsert: Jika reg_no atau NIK sama, timpa dengan data baru
+        cursor.execute('''
+            INSERT INTO candidates (session_id, reg_no, nik, full_name, whatsapp, education, major, birth_info, reg_card)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(session_id, reg_no, nik) DO UPDATE SET
+                full_name = excluded.full_name,
+                whatsapp = excluded.whatsapp,
+                education = excluded.education,
+                major = excluded.major,
+                birth_info = excluded.birth_info,
+                reg_card = CASE WHEN excluded.reg_card != '' THEN excluded.reg_card ELSE candidates.reg_card END
+        ''', (active_session[0], reg_no, nik, full_name, whatsapp, education, major, birth_info, filename))
+        
         conn.commit()
         conn.close()
         return "<h3 style='text-align:center; margin-top:50px; color:green;'>Data Anda berhasil dikirim! Terima kasih.</h3>"
