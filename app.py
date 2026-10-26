@@ -119,7 +119,6 @@ def admin_dashboard():
                 error_message = "Belum ada data kandidat yang masuk pada sesi ini."
                 return render_template('admin.html', active_session=active_session, candidate_count=0, error_message=error_message)
             
-            # Kolom Excel sesuai permintaan: No Registrasi, NIK KTP, Nama Lengkap, No WA Aktif, Pendidikan, Jurusan, Tempat Tanggal Lahir
             df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', nik AS 'NIK KTP', full_name AS 'Nama Lengkap', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', birth_info AS 'Tempat, Tanggal Lahir' FROM candidates WHERE session_id = {s_id}", conn)
             
             excel_filename = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
@@ -207,11 +206,13 @@ def apply(token):
         education = request.form.get('education', '').strip().upper()
         major = request.form.get('major', '').strip().upper()
         
-        # Format Tempat, Tanggal Lahir (Bulan dengan huruf kapital di awal, misal: Juli)
-        birth_place_day = request.form.get('birth_place_day', '').strip().title()
+        # Format Tempat, Tanggal Lahir (Contoh: PALU, 12 Juni 2023)
+        birth_place = request.form.get('birth_place', '').strip().upper()
+        birth_day = request.form.get('birth_day', '').strip()
         birth_month = request.form.get('birth_month', '').strip().capitalize()
         birth_year = request.form.get('birth_year', '').strip()
-        birth_info = f"{birth_place_day} {birth_month} {birth_year}".strip()
+        
+        birth_info = f"{birth_place}, {birth_day} {birth_month} {birth_year}".strip()
         
         file = request.files.get('reg_card')
         filename = ""
@@ -220,7 +221,6 @@ def apply(token):
             filename = f"{reg_no}_{int(datetime.datetime.now().timestamp())}_{safe_name}"
             save_path = os.path.join(UPLOAD_FOLDER, filename)
             
-            # Kompresi gambar otomatis via Pillow agar upload cepat
             try:
                 img = Image.open(file)
                 img = img.convert('RGB')
@@ -232,7 +232,6 @@ def apply(token):
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         
-        # Fitur Upsert: Jika reg_no atau NIK sama, data lama ditimpa data baru
         cursor.execute('''
             INSERT INTO candidates (session_id, reg_no, nik, full_name, whatsapp, education, major, birth_info, reg_card)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
