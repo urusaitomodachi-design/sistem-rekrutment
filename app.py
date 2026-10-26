@@ -40,8 +40,7 @@ def init_db():
             education TEXT,
             major TEXT,
             birth_info TEXT,
-            reg_card TEXT,
-            UNIQUE(session_id, reg_no, nik)
+            reg_card TEXT
         )
     ''')
     conn.commit()
@@ -119,7 +118,18 @@ def admin_dashboard():
                 error_message = "Belum ada data kandidat yang masuk pada sesi ini."
                 return render_template('admin.html', active_session=active_session, candidate_count=0, error_message=error_message)
             
-            df = pd.read_sql_query(f"SELECT reg_no AS 'No Registrasi', nik AS 'NIK KTP', full_name AS 'Nama Lengkap', whatsapp AS 'No WA Aktif', education AS 'Pendidikan', major AS 'Jurusan', birth_info AS 'Tempat, Tanggal Lahir' FROM candidates WHERE session_id = {s_id}", conn)
+            # Kolom Excel dengan No WA Aktif dipindah ke posisi paling akhir
+            df = pd.read_sql_query(f"""
+                SELECT 
+                    reg_no AS 'No Registrasi', 
+                    nik AS 'NIK KTP', 
+                    full_name AS 'Nama Lengkap', 
+                    education AS 'Pendidikan', 
+                    major AS 'Jurusan', 
+                    birth_info AS 'Tempat, Tanggal Lahir', 
+                    whatsapp AS 'No WA Aktif' 
+                FROM candidates WHERE session_id = {s_id}
+            """, conn)
             
             excel_filename = f"Data_Kandidat_{pt}_{dept}.xlsx".replace(" ", "_")
             with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
@@ -206,7 +216,6 @@ def apply(token):
         education = request.form.get('education', '').strip().upper()
         major = request.form.get('major', '').strip().upper()
         
-        # Format Tempat, Tanggal Lahir (Contoh: PALU, 12 Juni 2023)
         birth_place = request.form.get('birth_place', '').strip().upper()
         birth_day = request.form.get('birth_day', '').strip()
         birth_month = request.form.get('birth_month', '').strip().capitalize()
@@ -232,17 +241,32 @@ def apply(token):
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         
-        cursor.execute('''
-            INSERT INTO candidates (session_id, reg_no, nik, full_name, whatsapp, education, major, birth_info, reg_card)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(session_id, reg_no, nik) DO UPDATE SET
-                full_name = excluded.full_name,
-                whatsapp = excluded.whatsapp,
-                education = excluded.education,
-                major = excluded.major,
-                birth_info = excluded.birth_info,
-                reg_card = CASE WHEN excluded.reg_card != '' THEN excluded.reg_card ELSE candidates.reg_card END
-        ''', (active_session[0], reg_no, nik, full_name, whatsapp, education, major, birth_info, filename))
+        # Cek apakah No Registrasi ATAU NIK KTP sudah ada pada sesi aktif
+        existing = cursor.execute('''
+            SELECT id FROM candidates 
+            WHERE session_id = ? AND (reg_no = ? OR nik = ?)
+        ''', (active_session[0], reg_no, nik)).fetchone()
+        
+        if existing:
+            # Jika ada yang sama, timpa/update data lama
+            cursor.execute('''
+                UPDATE candidates SET
+                    reg_no = ?,
+                    nik = ?,
+                    full_name = ?,
+                    whatsapp = ?,
+                    education = ?,
+                    major = ?,
+                    birth_info = ?,
+                    reg_card = COALESCE(NULLIF(?, ''), reg_card)
+                WHERE id = ?
+            ''', (reg_no, nik, full_name, whatsapp, education, major, birth_info, filename, existing[0]))
+        else:
+            # Jika belum ada, masukkan sebagai data baru
+            cursor.execute('''
+                INSERT INTO candidates (session_id, reg_no, nik, full_name, whatsapp, education, major, birth_info, reg_card)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (active_session[0], reg_no, nik, full_name, whatsapp, education, major, birth_info, filename))
         
         conn.commit()
         conn.close()
