@@ -118,7 +118,6 @@ def admin_dashboard():
                 error_message = "Belum ada data kandidat yang masuk pada sesi ini."
                 return render_template('admin.html', active_session=active_session, candidate_count=0, error_message=error_message)
             
-            # Kolom Excel dengan No WA Aktif dipindah ke posisi paling akhir
             df = pd.read_sql_query(f"""
                 SELECT 
                     reg_no AS 'No Registrasi', 
@@ -241,14 +240,12 @@ def apply(token):
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
         
-        # Cek apakah No Registrasi ATAU NIK KTP sudah ada pada sesi aktif
         existing = cursor.execute('''
             SELECT id FROM candidates 
             WHERE session_id = ? AND (reg_no = ? OR nik = ?)
         ''', (active_session[0], reg_no, nik)).fetchone()
         
         if existing:
-            # Jika ada yang sama, timpa/update data lama
             cursor.execute('''
                 UPDATE candidates SET
                     reg_no = ?,
@@ -262,7 +259,6 @@ def apply(token):
                 WHERE id = ?
             ''', (reg_no, nik, full_name, whatsapp, education, major, birth_info, filename, existing[0]))
         else:
-            # Jika belum ada, masukkan sebagai data baru
             cursor.execute('''
                 INSERT INTO candidates (session_id, reg_no, nik, full_name, whatsapp, education, major, birth_info, reg_card)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
