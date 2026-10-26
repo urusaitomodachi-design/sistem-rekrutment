@@ -17,12 +17,12 @@
             
             <form id="applyForm" method="POST" enctype="multipart/form-data">
                 <div class="mb-3">
-                    <label class="form-label">No Registrasi:</label>
-                    <input type="text" name="reg_no" class="form-control text-uppercase" placeholder="Masukkan No Registrasi" required>
+                    <label class="form-label">No Registrasi (Hanya Angka):</label>
+                    <input type="text" name="reg_no" class="form-control" placeholder="Masukkan No Registrasi" inputmode="numeric" pattern="[0-9]*" oninput="this.value = this.value.replace(/[^0-9]/g, '')" required>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">NIK KTP:</label>
-                    <input type="text" name="nik" class="form-control text-uppercase" placeholder="Masukkan 16 Digit NIK KTP" required>
+                    <label class="form-label">NIK KTP (Hanya Angka):</label>
+                    <input type="text" name="nik" class="form-control" placeholder="Masukkan 16 Digit NIK KTP" inputmode="numeric" pattern="[0-9]*" oninput="this.value = this.value.replace(/[^0-9]/g, '')" required>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Nama Lengkap:</label>
@@ -95,12 +95,12 @@
                     <label class="form-label">No WhatsApp Aktif:</label>
                     <input type="tel" name="whatsapp" class="form-control" placeholder="Contoh: 08123456789" required>
                 </div>
-                <button type="submit" class="btn btn-success w-100 py-2">Kirim Data</button>
+                <button type="submit" class="btn btn-success w-100 py-2" id="submitBtn">Kirim Data</button>
             </form>
         </div>
     </div>
 
-    <!-- Bootstrap Modal Konfirmasi -->
+    <!-- Bootstrap Modal Konfirmasi dengan Animasi Loading -->
     <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -113,7 +113,9 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cek Kembali</button>
-                    <button type="button" class="btn btn-success btn-sm" id="confirmSubmitBtn">Ya, Kirim Data</button>
+                    <button type="button" class="btn btn-success btn-sm" id="confirmSubmitBtn">
+                        Ya, Kirim Data
+                    </button>
                 </div>
             </div>
         </div>
@@ -124,6 +126,7 @@
         const applyForm = document.getElementById('applyForm');
         const confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
         const confirmSubmitBtn = document.getElementById('confirmSubmitBtn');
+        const submitBtn = document.getElementById('submitBtn');
         let isConfirmed = false;
 
         applyForm.addEventListener('submit', function(e) {
@@ -140,6 +143,14 @@
         confirmSubmitBtn.addEventListener('click', function() {
             isConfirmed = true;
             confirmModal.hide();
+            
+            // Ubah tombol utama menjadi animasi loading (spinner)
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Sedang Mengirim Data...
+            `;
+            
             applyForm.submit();
         });
     </script>
