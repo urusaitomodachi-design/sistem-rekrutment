@@ -7,9 +7,9 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light py-4">
-    <div class="container" style="max-width: 600px;">
+    <div class="container" style="max-width: 700px;">
         <div class="card shadow-sm p-4">
-            <h4 class="text-center mb-4">Dashboard Admin Rekrutmen</h4>
+            <h3 class="text-center mb-4">Dashboard Admin Rekrutmen</h3>
             
             {% if error_message %}
             <div class="alert alert-danger py-2 text-center small mb-3">
@@ -18,27 +18,40 @@
             {% endif %}
 
             {% if active_session %}
-            <div class="alert alert-success p-3 mb-4">
-                <h5 class="alert-heading">Sesi Aktif Berjalan</h5>
+            <div class="alert alert-success p-4 mb-4">
+                <h4 class="alert-heading">Sesi Aktif Berjalan</h4>
                 <hr>
                 <p class="mb-1">PT: <b>{{ active_session[1] }}</b></p>
                 <p class="mb-1">Departemen: <b>{{ active_session[2] }}</b></p>
-                <p class="mb-1">Jumlah Kandidat Masuk: <b id="candidateCount">{{ candidate_count }}</b></p>
-                <p class="mb-3 text-break small text-muted">Link Pendaftaran: <br><code>{{ request.host_url }}apply/{{ active_session[3] }}</code></p>
+                <p class="mb-3">Jumlah Kandidat Masuk: <b id="candidateCount" class="fs-5 text-primary">{{ candidate_count }}</b></p>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Link Pendaftaran:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control bg-white" id="regLink" value="{{ request.host_url }}apply/{{ active_session[3] }}" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyLink()">Salin Link</button>
+                    </div>
+                </div>
+
+                <!-- Barcode / QR Code Pendaftaran -->
+                <div class="text-center mb-4">
+                    <label class="form-label fw-bold d-block mb-2">Barcode QR Pendaftaran:</label>
+                    <div id="qrcode" class="d-inline-block bg-white p-2 rounded shadow-sm"></div>
+                </div>
                 
                 <div class="d-grid gap-2">
                     <form method="POST">
                         <input type="hidden" name="action" value="download_all">
-                        <button type="submit" class="btn btn-primary w-100">Download Data Excel & Semua Foto (ZIP)</button>
+                        <button type="submit" class="btn btn-primary w-100 py-2">Download Data Excel & Semua Foto (ZIP)</button>
                     </form>
                     <!-- Tombol Matikan Sesi memicu Modal Konfirmasi -->
-                    <button type="button" class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#stopModal">
+                    <button type="button" class="btn btn-danger w-100 py-2" data-bs-toggle="modal" data-bs-target="#stopModal">
                         Matikan Sesi
                     </button>
                 </div>
             </div>
             {% else %}
-            <div class="card p-3 mb-4 bg-white">
+            <div class="card p-4 mb-4 bg-white border">
                 <h5 class="mb-3">Buat Sesi Rekrutmen Baru</h5>
                 <form method="POST">
                     <input type="hidden" name="action" value="start">
@@ -50,13 +63,13 @@
                         <label class="form-label">Departemen:</label>
                         <input type="text" name="department" class="form-control text-uppercase" placeholder="Contoh: MARKETING" required>
                     </div>
-                    <button type="submit" class="btn btn-success w-100">Mulai Sesi Baru</button>
+                    <button type="submit" class="btn btn-success w-100 py-2">Mulai Sesi Baru</button>
                 </form>
             </div>
             {% endif %}
 
             <div class="text-center mt-3">
-                <a href="/logout" class="text-danger text-decoration-none small">Logout Admin</a>
+                <a href="/logout" class="text-danger text-decoration-none small fw-bold">Logout Admin</a>
             </div>
         </div>
     </div>
@@ -83,8 +96,28 @@
         </div>
     </div>
 
+    <!-- Script Bootstrap & QRCode Generator -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script>
+        {% if active_session %}
+        // Generate QR Code otomatis dari link pendaftaran
+        new QRCode(document.getElementById("qrcode"), {
+            text: "{{ request.host_url }}apply/{{ active_session[3] }}",
+            width: 150,
+            height: 150
+        });
+        {% endif %}
+
+        // Fungsi Salin Link
+        function copyLink() {
+            var copyText = document.getElementById("regLink");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(copyText.value);
+            alert("Link pendaftaran berhasil disalin!");
+        }
+
         // Auto-refresh jumlah kandidat secara real-time setiap 3 detik
         setInterval(function() {
             fetch('/api/candidate-count')
