@@ -53,8 +53,9 @@
                 <div class="mb-3">
                     <label class="form-label">Tempat & Tanggal Lahir:</label>
                     <div class="row g-2">
+                        <!-- Input Tempat Lahir: Hanya Huruf, Tanpa Angka, Tanpa Spasi, Tanpa Tanda Baca -->
                         <div class="col-12">
-                            <input type="text" name="birth_place" class="form-control text-uppercase" placeholder="Masukkan Kota Lahir (Cth: PALU)" required>
+                            <input type="text" name="birth_place" class="form-control text-uppercase" placeholder="Kota Lahir (Hanya Huruf, Tanpa Spasi, Cth: PALU)" oninput="this.value = this.value.replace(/[^A-Za-z]/g, '').toUpperCase()" required>
                         </div>
                         <div class="col-4">
                             <select name="birth_day" class="form-select" required>
@@ -100,7 +101,7 @@
         </div>
     </div>
 
-    <!-- Bootstrap Modal Konfirmasi dengan Animasi Loading -->
+    <!-- Bootstrap Modal Konfirmasi Kirim Data -->
     <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -113,9 +114,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cek Kembali</button>
-                    <button type="button" class="btn btn-success btn-sm" id="confirmSubmitBtn">
-                        Ya, Kirim Data
-                    </button>
+                    <button type="button" class="btn btn-success btn-sm" id="confirmSubmitBtn">Ya, Kirim Data</button>
                 </div>
             </div>
         </div>
@@ -144,7 +143,6 @@
             isConfirmed = true;
             confirmModal.hide();
             
-            // Ubah tombol utama menjadi animasi loading (spinner)
             submitBtn.disabled = true;
             submitBtn.innerHTML = `
                 <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
