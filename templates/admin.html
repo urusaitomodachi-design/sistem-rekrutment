@@ -5,85 +5,97 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Admin Rekrutmen</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
-<body class="bg-light py-3">
-    <div class="container px-3" style="max-width: 600px;">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0">Panel Admin</h5>
-            <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
-        </div>
-
-        {% if error_message %}
-        <div class="alert alert-warning alert-dismissible fade show shadow-sm mb-3" role="alert">
-            {{ error_message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        {% endif %}
-
-        {% if not active_session %}
-        <div class="card p-3 shadow-sm mb-4">
-            <h6 class="mb-3">Mulai Sesi Rekrutmen Baru</h6>
-            <form method="POST">
-                <input type="hidden" name="action" value="start">
-                <div class="mb-3">
-                    <label class="form-label">Nama PT:</label>
-                    <input type="text" name="pt_name" class="form-control text-uppercase" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Departemen:</label>
-                    <input type="text" name="department" class="form-control text-uppercase" required>
-                </div>
-                <button type="submit" class="btn btn-success w-100">Buat Sesi & Tampilkan Barcode</button>
-            </form>
-        </div>
-        {% else %}
-        <div class="card p-3 shadow-sm mb-4 text-center">
-            <h5 class="text-primary mb-1">PT: {{ active_session[1] }}</h5>
-            <h6 class="text-secondary mb-3">Departemen: {{ active_session[2] }}</h6>
+<body class="bg-light py-4">
+    <div class="container" style="max-width: 600px;">
+        <div class="card shadow-sm p-4">
+            <h4 class="text-center mb-4">Dashboard Admin Rekrutmen</h4>
             
-            <div class="alert alert-secondary py-2 mb-3">
-                <span>Kandidat Masuk: <b id="candidate-count" class="fs-5 text-dark">{{ candidate_count }}</b> orang</span>
+            {% if error_message %}
+            <div class="alert alert-danger py-2 text-center small mb-3">
+                {{ error_message }}
             </div>
-            
-            <p class="small text-muted mb-2">Barcode ini dapat digunakan oleh banyak kandidat secara bergantian selama sesi aktif. Sesi akan di-reset otomatis setelah file diunduh.</p>
-            
-            <div class="d-flex justify-content-center mb-3">
-                <div id="qrcode" class="p-2 bg-white border rounded"></div>
-            </div>
+            {% endif %}
 
-            <div class="d-grid gap-2 d-sm-flex justify-content-sm-center mt-3">
-                <form method="POST" class="w-100">
-                    <input type="hidden" name="action" value="stop">
-                    <button type="submit" class="btn btn-warning w-100 btn-sm">Matikan Sesi</button>
-                </form>
-                <form method="POST" class="w-100">
-                    <input type="hidden" name="action" value="download_all">
-                    <button type="submit" class="btn btn-primary w-100 btn-sm">Download Data & Foto (ZIP) & Reset</button>
+            {% if active_session %}
+            <div class="alert alert-success p-3 mb-4">
+                <h5 class="alert-heading">Sesi Aktif Berjalan</h5>
+                <hr>
+                <p class="mb-1">PT: <b>{{ active_session[1] }}</b></p>
+                <p class="mb-1">Departemen: <b>{{ active_session[2] }}</b></p>
+                <p class="mb-1">Jumlah Kandidat Masuk: <b id="candidateCount">{{ candidate_count }}</b></p>
+                <p class="mb-3 text-break small text-muted">Link Pendaftaran: <br><code>{{ request.host_url }}apply/{{ active_session[3] }}</code></p>
+                
+                <div class="d-grid gap-2">
+                    <form method="POST">
+                        <input type="hidden" name="action" value="download_all">
+                        <button type="submit" class="btn btn-primary w-100">Download Data Excel & Semua Foto (ZIP)</button>
+                    </form>
+                    <!-- Tombol Matikan Sesi memicu Modal Konfirmasi -->
+                    <button type="button" class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#stopModal">
+                        Matikan Sesi
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <div class="card p-3 mb-4 bg-white">
+                <h5 class="mb-3">Buat Sesi Rekrutmen Baru</h5>
+                <form method="POST">
+                    <input type="hidden" name="action" value="start">
+                    <div class="mb-3">
+                        <label class="form-label">Nama PT:</label>
+                        <input type="text" name="pt_name" class="form-control text-uppercase" placeholder="Contoh: PT MAJU MUNDUR" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Departemen:</label>
+                        <input type="text" name="department" class="form-control text-uppercase" placeholder="Contoh: MARKETING" required>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">Mulai Sesi Baru</button>
                 </form>
             </div>
-        </div>
-        
-        <script>
-            let sessionToken = "{{ active_session[3] }}";
-            let currentUrl = window.location.origin + "/apply/" + sessionToken;
-            new QRCode(document.getElementById("qrcode"), {
-                text: currentUrl,
-                width: 180,
-                height: 180
-            });
+            {% endif %}
 
-            function updateCandidateCount() {
-                fetch('/api/candidate-count')
-                    .then(response => response.json())
-                    .then(data => {
-                        document.getElementById('candidate-count').innerText = data.count;
-                    })
-                    .catch(error => console.error('Error:', error));
-            }
-            setInterval(updateCandidateCount, 3000);
-        </script>
-        {% endif %}
+            <div class="text-center mt-3">
+                <a href="/logout" class="text-danger text-decoration-none small">Logout Admin</a>
+            </div>
+        </div>
     </div>
+
+    <!-- Modal Konfirmasi Matikan Sesi -->
+    <div class="modal fade" id="stopModal" tabindex="-1" aria-labelledby="stopModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="stopModalLabel">Konfirmasi Matikan Sesi</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Apakah yakin ingin mematikan sesi?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                    <form method="POST" style="display: inline;">
+                        <input type="hidden" name="action" value="stop">
+                        <button type="submit" class="btn btn-danger btn-sm">Ya, Matikan Sesi</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Auto-refresh jumlah kandidat secara real-time setiap 3 detik
+        setInterval(function() {
+            fetch('/api/candidate-count')
+                .then(response => response.json())
+                .then(data => {
+                    const countEl = document.getElementById('candidateCount');
+                    if(countEl) {
+                        countEl.innerText = data.count;
+                    }
+                }).catch(err => {});
+        }, 3000);
+    </script>
 </body>
 </html>
